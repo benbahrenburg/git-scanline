@@ -1,7 +1,7 @@
-use std::collections::HashMap;
+use crate::types::{Commit, CommitQualityData};
 use once_cell::sync::Lazy;
 use regex::Regex;
-use crate::types::{Commit, CommitQualityData};
+use std::collections::HashMap;
 
 static WIP_PATTERN: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(?i)\b(wip|temp|tmp|fixup|squash|hack|dirty|oops|typo|debug|draft)\b|^(fix|update|changes|stuff|misc|test|cleanup|commit|save|ok|done)[.!\s]*$")
@@ -9,7 +9,7 @@ static WIP_PATTERN: Lazy<Regex> = Lazy::new(|| {
 });
 
 const LARGE_COMMIT_THRESHOLD: usize = 30;
-const SHORT_MSG_MIN_LENGTH:    usize = 10;
+const SHORT_MSG_MIN_LENGTH: usize = 10;
 
 /// Tracks per-file involvement in low-quality commits (WIP/short messages)
 /// and oversized commits (mass reformats, merge-all).
@@ -17,37 +17,48 @@ pub fn analyze_commit_quality(
     commits: &[Commit],
     files: &[String],
 ) -> HashMap<String, CommitQualityData> {
-    let file_set: std::collections::HashSet<&str> =
-        files.iter().map(|s| s.as_str()).collect();
+    let file_set: std::collections::HashSet<&str> = files.iter().map(|s| s.as_str()).collect();
 
-    let mut wip_counts:   HashMap<String, usize> = HashMap::new();
+    let mut wip_counts: HashMap<String, usize> = HashMap::new();
     let mut large_counts: HashMap<String, usize> = HashMap::new();
 
     for commit in commits {
         let subj = commit.subject.trim();
-        let is_wip   = WIP_PATTERN.is_match(subj) || subj.len() < SHORT_MSG_MIN_LENGTH;
+        let is_wip = WIP_PATTERN.is_match(subj) || subj.len() < SHORT_MSG_MIN_LENGTH;
         let is_large = commit.files.len() > LARGE_COMMIT_THRESHOLD;
 
         for file in &commit.files {
-            if !file_set.contains(file.as_str()) { continue; }
-            if is_wip   { *wip_counts.entry(file.clone()).or_default()   += 1; }
-            if is_large { *large_counts.entry(file.clone()).or_default() += 1; }
+            if !file_set.contains(file.as_str()) {
+                continue;
+            }
+            if is_wip {
+                *wip_counts.entry(file.clone()).or_default() += 1;
+            }
+            if is_large {
+                *large_counts.entry(file.clone()).or_default() += 1;
+            }
         }
     }
 
-    let max_wip   = wip_counts.values().copied().max().unwrap_or(1).max(1) as f64;
+    let max_wip = wip_counts.values().copied().max().unwrap_or(1).max(1) as f64;
     let max_large = large_counts.values().copied().max().unwrap_or(1).max(1) as f64;
 
-    files.iter().map(|file| {
-        let wip   = *wip_counts.get(file).unwrap_or(&0);
-        let large = *large_counts.get(file).unwrap_or(&0);
-        let score = (wip as f64 / max_wip) * 60.0 + (large as f64 / max_large) * 40.0;
-        (file.clone(), CommitQualityData {
-            wip_commits:        wip,
-            large_commit_count: large,
-            commit_quality_score: score,
+    files
+        .iter()
+        .map(|file| {
+            let wip = *wip_counts.get(file).unwrap_or(&0);
+            let large = *large_counts.get(file).unwrap_or(&0);
+            let score = (wip as f64 / max_wip) * 60.0 + (large as f64 / max_large) * 40.0;
+            (
+                file.clone(),
+                CommitQualityData {
+                    wip_commits: wip,
+                    large_commit_count: large,
+                    commit_quality_score: score,
+                },
+            )
         })
-    }).collect()
+        .collect()
 }
 
 #[cfg(test)]
@@ -73,8 +84,14 @@ mod tests {
         ];
         let files = vec!["a.rs".to_string(), "b.rs".to_string()];
         let result = analyze_commit_quality(&commits, &files);
-        assert!(result["a.rs"].wip_commits > 0, "WIP commit should be detected for a.rs");
-        assert_eq!(result["b.rs"].wip_commits, 0, "Well-described commit should not count as WIP");
+        assert!(
+            result["a.rs"].wip_commits > 0,
+            "WIP commit should be detected for a.rs"
+        );
+        assert_eq!(
+            result["b.rs"].wip_commits, 0,
+            "Well-described commit should not count as WIP"
+        );
     }
 
     #[test]
@@ -83,7 +100,10 @@ mod tests {
         let commits = vec![make_commit("fix", &["a.rs"])];
         let files = vec!["a.rs".to_string()];
         let result = analyze_commit_quality(&commits, &files);
-        assert!(result["a.rs"].wip_commits > 0, "Short commit message should count as WIP");
+        assert!(
+            result["a.rs"].wip_commits > 0,
+            "Short commit message should count as WIP"
+        );
     }
 
     #[test]
@@ -99,7 +119,10 @@ mod tests {
         };
         let tracked = vec!["src/file0.rs".to_string()];
         let result = analyze_commit_quality(&[commit], &tracked);
-        assert!(result["src/file0.rs"].large_commit_count > 0, "Large commit should be detected");
+        assert!(
+            result["src/file0.rs"].large_commit_count > 0,
+            "Large commit should be detected"
+        );
     }
 
     #[test]
@@ -111,18 +134,31 @@ mod tests {
         let files = vec!["a.rs".to_string()];
         let result = analyze_commit_quality(&commits, &files);
         let score = result["a.rs"].commit_quality_score;
-        assert!(score >= 0.0 && score <= 100.0, "commit_quality_score {} out of range", score);
+        assert!(
+            score >= 0.0 && score <= 100.0,
+            "commit_quality_score {} out of range",
+            score
+        );
     }
 
     #[test]
     fn test_clean_commits_score_zero() {
         let commits = vec![
-            make_commit("implement OAuth2 token refresh with retry logic", &["auth.rs"]),
+            make_commit(
+                "implement OAuth2 token refresh with retry logic",
+                &["auth.rs"],
+            ),
             make_commit("add unit tests for token expiry edge cases", &["auth.rs"]),
         ];
         let files = vec!["auth.rs".to_string()];
         let result = analyze_commit_quality(&commits, &files);
-        assert_eq!(result["auth.rs"].wip_commits, 0, "Well-described commits should not be WIP");
-        assert_eq!(result["auth.rs"].large_commit_count, 0, "Small commits should not be large");
+        assert_eq!(
+            result["auth.rs"].wip_commits, 0,
+            "Well-described commits should not be WIP"
+        );
+        assert_eq!(
+            result["auth.rs"].large_commit_count, 0,
+            "Small commits should not be large"
+        );
     }
 }

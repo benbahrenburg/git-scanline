@@ -1,9 +1,14 @@
+use crate::types::{CouplingEntry, HotspotResult, Report, ReportMeta, SecurityRisk, Tier};
 use std::fs;
 use std::path::Path;
-use crate::types::{Report, HotspotResult, CouplingEntry, ReportMeta, SecurityRisk, Tier};
 
 pub fn report_html(report: &Report, output_file: &Path) -> Result<(), String> {
-    let html = build_html(&report.meta, &report.results, &report.couplings, &report.security_risks);
+    let html = build_html(
+        &report.meta,
+        &report.results,
+        &report.couplings,
+        &report.security_risks,
+    );
     fs::write(output_file, &html)
         .map_err(|e| format!("Failed to write {}: {e}", output_file.display()))?;
     eprintln!("✓ HTML report written to {}", output_file.display());
@@ -19,20 +24,33 @@ fn build_html(
     let top: Vec<&HotspotResult> = results.iter().take(25).collect();
 
     let chart_labels = serde_json::to_string(
-        &top.iter().map(|r| {
-            let parts: Vec<&str> = r.file.split('/').collect();
-            parts.iter().rev().take(2).rev().cloned().collect::<Vec<_>>().join("/")
-        }).collect::<Vec<_>>()
-    ).unwrap_or_default();
+        &top.iter()
+            .map(|r| {
+                let parts: Vec<&str> = r.file.split('/').collect();
+                parts
+                    .iter()
+                    .rev()
+                    .take(2)
+                    .rev()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join("/")
+            })
+            .collect::<Vec<_>>(),
+    )
+    .unwrap_or_default();
     let chart_scores = serde_json::to_string(
-        &top.iter().map(|r| r.hotspot_score.round() as u64).collect::<Vec<_>>()
-    ).unwrap_or_default();
-    let chart_colors = serde_json::to_string(
-        &top.iter().map(|r| tier_color(&r.tier)).collect::<Vec<_>>()
-    ).unwrap_or_default();
-    let full_labels = serde_json::to_string(
-        &top.iter().map(|r| r.file.as_str()).collect::<Vec<_>>()
-    ).unwrap_or_default();
+        &top.iter()
+            .map(|r| r.hotspot_score.round() as u64)
+            .collect::<Vec<_>>(),
+    )
+    .unwrap_or_default();
+    let chart_colors =
+        serde_json::to_string(&top.iter().map(|r| tier_color(&r.tier)).collect::<Vec<_>>())
+            .unwrap_or_default();
+    let full_labels =
+        serde_json::to_string(&top.iter().map(|r| r.file.as_str()).collect::<Vec<_>>())
+            .unwrap_or_default();
 
     let crit_count: usize = results.iter().filter(|r| r.tier == Tier::Critical).count();
     let high_count: usize = results.iter().filter(|r| r.tier == Tier::High).count();
@@ -43,7 +61,9 @@ fn build_html(
             r#"<div class="stat" style="border-color:#ef4444"><div class="stat-label" style="color:#f87171">Security Risks</div><div class="stat-value red">{}</div></div>"#,
             security_risks.len()
         )
-    } else { String::new() };
+    } else {
+        String::new()
+    };
 
     let security_section = if !security_risks.is_empty() {
         let rows: String = security_risks.iter().map(|r| format!(
@@ -56,7 +76,9 @@ fn build_html(
              <table><thead><tr><th>File</th><th>Risk Type</th><th style=\"text-align:right\">Commits</th><th>First Seen</th><th>Last Seen</th></tr></thead>\
              <tbody>{rows}</tbody></table></div>"
         )
-    } else { String::new() };
+    } else {
+        String::new()
+    };
 
     let table_rows: String = results.iter().enumerate().map(|(i, r)| {
         let wip_cell = if r.details.wip_commits > 0 {
@@ -86,7 +108,9 @@ fn build_html(
              <table><thead><tr><th>File A</th><th>File B</th><th style=\"text-align:right\">Co-changes</th><th style=\"text-align:right\">Coupling Strength</th></tr></thead>\
              <tbody>{rows}</tbody></table></div>"
         )
-    } else { String::new() };
+    } else {
+        String::new()
+    };
 
     let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
 
@@ -175,44 +199,47 @@ fn build_html(
   </script>
 </body>
 </html>"#,
-        since      = esc(&meta.since),
-        repo       = esc(&meta.repo_path),
-        now        = now,
-        commits    = meta.commit_count,
+        since = esc(&meta.since),
+        repo = esc(&meta.repo_path),
+        now = now,
+        commits = meta.commit_count,
         file_count = meta.file_count,
-        crit       = crit_count,
-        high       = high_count,
+        crit = crit_count,
+        high = high_count,
         bug_commits = total_bug_commits,
-        security_stat    = security_stat,
+        security_stat = security_stat,
         security_section = security_section,
-        table_rows       = table_rows,
+        table_rows = table_rows,
         coupling_section = coupling_section,
         chart_labels = chart_labels,
         chart_scores = chart_scores,
         chart_colors = chart_colors,
-        full_labels  = full_labels,
+        full_labels = full_labels,
     )
 }
 
 fn esc(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
-     .replace('"', "&quot;").replace('\'', "&#x27;")
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#x27;")
 }
 
 fn tier_color(tier: &Tier) -> &'static str {
     match tier {
         Tier::Critical => "rgba(239,68,68,0.75)",
-        Tier::High     => "rgba(249,115,22,0.75)",
-        Tier::Medium   => "rgba(234,179,8,0.75)",
-        Tier::Low      => "rgba(34,197,94,0.75)",
+        Tier::High => "rgba(249,115,22,0.75)",
+        Tier::Medium => "rgba(234,179,8,0.75)",
+        Tier::Low => "rgba(34,197,94,0.75)",
     }
 }
 
 fn tier_badge(tier: &Tier) -> &'static str {
     match tier {
         Tier::Critical => "<span class=\"badge badge-critical\">🔴 CRITICAL</span>",
-        Tier::High     => "<span class=\"badge badge-high\">🟠 HIGH</span>",
-        Tier::Medium   => "<span class=\"badge badge-medium\">🟡 MEDIUM</span>",
-        Tier::Low      => "<span class=\"badge badge-low\">🟢 LOW</span>",
+        Tier::High => "<span class=\"badge badge-high\">🟠 HIGH</span>",
+        Tier::Medium => "<span class=\"badge badge-medium\">🟡 MEDIUM</span>",
+        Tier::Low => "<span class=\"badge badge-low\">🟢 LOW</span>",
     }
 }

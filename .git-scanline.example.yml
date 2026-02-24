@@ -1,0 +1,78 @@
+# .git-scanline.example.yml
+#
+# Copy this file to .git-scanline.yml in your repository root, then run:
+#
+#   git-scanline --config .git-scanline.yml [path]
+#
+# Generate a full annotated template at any time with:
+#
+#   git-scanline --generate-config > .git-scanline.yml
+#
+# CLI flags always take precedence over values in this file.
+# All fields are optional — omit any field to use the built-in default.
+
+# ── Analysis scope ─────────────────────────────────────────────────────────────
+
+# Analyze commits since this date. Accepts any git date format.
+# Examples: "6 months ago", "2024-01-01", "1 year ago"
+since: "6 months ago"
+
+# Restrict analysis to a subdirectory (relative path from the repo root).
+# Remove or comment out to analyze the entire repository.
+path: "src"
+
+# Number of hotspot results to display. All files are always analyzed;
+# only the top-N are shown in the report.
+top: 20
+
+# Only show files that appear in bug-fix commits.
+bugs_only: false
+
+# ── Output ─────────────────────────────────────────────────────────────────────
+
+# Output format: terminal, json, html
+format: "terminal"
+
+# Output file path. Uncomment and set a path to save the report automatically.
+# output: "hotspot-report.json"
+
+# ── File filtering ─────────────────────────────────────────────────────────────
+
+# Additional directories to exclude (merged with the built-in exclusion list).
+# Useful for generated code, protocol buffers, database migrations, or test fixtures.
+exclude_dirs:
+  - "generated"
+  - "proto"
+  - "migrations"
+  - "fixtures"
+
+# Built-in excluded directories to allow back into analysis.
+# Use this when a normally-noise directory contains real source code for your project.
+# Built-in excluded dirs: node_modules, .git, vendor, dist, build, coverage, target, ...
+include_dirs:
+  - "dist"
+
+# Additional exact filenames to exclude (matched against the filename, not full path).
+exclude_files:
+  - "schema.graphql"
+  - "openapi.json"
+
+# Additional file extensions to exclude.
+exclude_extensions:
+  - ".pb.go"
+  - ".generated.ts"
+  - ".d.ts"
+
+# ── Scoring weights ────────────────────────────────────────────────────────────
+# Weights are normalized at runtime so they always sum to 1.0.
+# Only the ratios between weights matter — you can use any positive numbers.
+# Increase a weight to emphasize that signal; decrease to de-emphasize it.
+
+weights:
+  churn: 0.27           # Commit frequency with recency decay
+  bugs: 0.40            # Correlation with bug-fix commits (boosted for this project)
+  reverts: 0.14         # Files that have been reverted
+  bursts: 0.09          # Rapid-commit windows (many commits in 24 h)
+  coupling: 0.09        # Files that always change together
+  silo: 0.05            # Single-author concentration risk
+  commit_quality: 0.09  # WIP and oversized commits

@@ -1,7 +1,7 @@
+use crate::types::Report;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::Path;
-use crate::types::Report;
 
 /// Outputs the report as JSON. Writes to a file if given, otherwise stdout.
 pub fn report_json(report: &Report, output_file: Option<&Path>) -> Result<(), String> {

@@ -95,9 +95,9 @@ impl std::fmt::Display for Tier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Tier::Critical => write!(f, "CRITICAL"),
-            Tier::High     => write!(f, "HIGH"),
-            Tier::Medium   => write!(f, "MEDIUM"),
-            Tier::Low      => write!(f, "LOW"),
+            Tier::High => write!(f, "HIGH"),
+            Tier::Medium => write!(f, "MEDIUM"),
+            Tier::Low => write!(f, "LOW"),
         }
     }
 }
@@ -146,12 +146,12 @@ pub struct Weights {
 impl Default for Weights {
     fn default() -> Self {
         Weights {
-            churn:          0.27,
-            bugs:           0.27,
-            reverts:        0.14,
-            bursts:         0.09,
-            coupling:       0.09,
-            silo:           0.05,
+            churn: 0.27,
+            bugs: 0.27,
+            reverts: 0.14,
+            bursts: 0.09,
+            coupling: 0.09,
+            silo: 0.05,
             commit_quality: 0.09,
         }
     }

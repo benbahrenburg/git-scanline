@@ -1,5 +1,5 @@
+use crate::types::{ChurnData, Commit};
 use std::collections::{HashMap, HashSet};
-use crate::types::{Commit, ChurnData};
 
 // Exponential decay: λ = 0.005 → half-life ≈ 139 days
 const DECAY_LAMBDA: f64 = 0.005;
@@ -18,7 +18,9 @@ pub fn analyze_churn(commits: &[Commit], files: &[String]) -> HashMap<String, Ch
         let decay_weight = (-DECAY_LAMBDA * days_ago).exp();
 
         for file in &commit.files {
-            if !file_set.contains(file.as_str()) { continue; }
+            if !file_set.contains(file.as_str()) {
+                continue;
+            }
             let entry = file_churn.entry(file.clone()).or_insert((0, 0.0));
             entry.0 += 1;
             entry.1 += decay_weight;
@@ -26,17 +28,23 @@ pub fn analyze_churn(commits: &[Commit], files: &[String]) -> HashMap<String, Ch
     }
 
     let total_commits = commits.len().max(1) as f64;
-    let max_weighted = file_churn.values().map(|(_, w)| *w).fold(0.0001_f64, f64::max);
+    let max_weighted = file_churn
+        .values()
+        .map(|(_, w)| *w)
+        .fold(0.0001_f64, f64::max);
 
-    files.iter().map(|file| {
-        let (count, weighted) = file_churn.get(file).cloned().unwrap_or((0, 0.0));
-        let data = ChurnData {
-            commit_count:   count,
-            raw_score:      ((count as f64 / total_commits) * 500.0).min(100.0),
-            weighted_score: (weighted / max_weighted) * 100.0,
-        };
-        (file.clone(), data)
-    }).collect()
+    files
+        .iter()
+        .map(|file| {
+            let (count, weighted) = file_churn.get(file).cloned().unwrap_or((0, 0.0));
+            let data = ChurnData {
+                commit_count: count,
+                raw_score: ((count as f64 / total_commits) * 500.0).min(100.0),
+                weighted_score: (weighted / max_weighted) * 100.0,
+            };
+            (file.clone(), data)
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -61,13 +69,23 @@ mod tests {
             make_commit(&["src/a.rs"]),
             make_commit(&["src/a.rs", "src/c.rs"]),
         ];
-        let files = vec!["src/a.rs".to_string(), "src/b.rs".to_string(), "src/c.rs".to_string()];
+        let files = vec![
+            "src/a.rs".to_string(),
+            "src/b.rs".to_string(),
+            "src/c.rs".to_string(),
+        ];
         let result = analyze_churn(&commits, &files);
         for (_, data) in &result {
-            assert!(data.weighted_score >= 0.0 && data.weighted_score <= 100.0,
-                "weighted_score {} out of range", data.weighted_score);
-            assert!(data.raw_score >= 0.0 && data.raw_score <= 100.0,
-                "raw_score {} out of range", data.raw_score);
+            assert!(
+                data.weighted_score >= 0.0 && data.weighted_score <= 100.0,
+                "weighted_score {} out of range",
+                data.weighted_score
+            );
+            assert!(
+                data.raw_score >= 0.0 && data.raw_score <= 100.0,
+                "raw_score {} out of range",
+                data.raw_score
+            );
         }
     }
 
@@ -91,8 +109,14 @@ mod tests {
         let commits = vec![make_commit(&["a.rs"])];
         let files = vec!["a.rs".to_string(), "b.rs".to_string()];
         let result = analyze_churn(&commits, &files);
-        assert_eq!(result["b.rs"].commit_count, 0, "b.rs was never committed, count must be 0");
-        assert_eq!(result["b.rs"].weighted_score, 0.0, "b.rs was never committed, score must be 0");
+        assert_eq!(
+            result["b.rs"].commit_count, 0,
+            "b.rs was never committed, count must be 0"
+        );
+        assert_eq!(
+            result["b.rs"].weighted_score, 0.0,
+            "b.rs was never committed, score must be 0"
+        );
     }
 
     #[test]

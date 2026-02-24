@@ -1,6 +1,6 @@
+use crate::types::{HotspotResult, Report, Tier};
 use colored::Colorize;
-use comfy_table::{Table, Cell, Color, Attribute, presets::UTF8_FULL};
-use crate::types::{Report, HotspotResult, Tier};
+use comfy_table::{presets::UTF8_FULL, Attribute, Cell, Color, Table};
 
 pub fn report_terminal(report: &Report) {
     eprintln!();
@@ -15,8 +15,16 @@ pub fn report_terminal(report: &Report) {
 
     // ── Security warnings ──────────────────────────────────────────────────
     if !report.security_risks.is_empty() {
-        println!("{}", "🔐 Security Risks — sensitive files found in git history:".red().bold());
-        println!("{}", "   Even deleted files remain accessible via git history!".red());
+        println!(
+            "{}",
+            "🔐 Security Risks — sensitive files found in git history:"
+                .red()
+                .bold()
+        );
+        println!(
+            "{}",
+            "   Even deleted files remain accessible via git history!".red()
+        );
         println!();
         for risk in &report.security_risks {
             println!(
@@ -24,7 +32,12 @@ pub fn report_terminal(report: &Report) {
                 "⚠".red(),
                 risk.file.cyan(),
                 risk.risk_type.red(),
-                format!("{} commit{}", risk.commit_count, if risk.commit_count != 1 { "s" } else { "" }).bright_black(),
+                format!(
+                    "{} commit{}",
+                    risk.commit_count,
+                    if risk.commit_count != 1 { "s" } else { "" }
+                )
+                .bright_black(),
                 risk.first_seen.bright_black(),
                 risk.last_seen.bright_black(),
             );
@@ -40,7 +53,9 @@ pub fn report_terminal(report: &Report) {
 
     let mut table = Table::new();
     table.load_preset(UTF8_FULL);
-    table.set_header(vec!["RANK", "FILE", "SCORE", "CHURN", "BUGS", "REVERTS", "WIP", "RISK"]);
+    table.set_header(vec![
+        "RANK", "FILE", "SCORE", "CHURN", "BUGS", "REVERTS", "WIP", "RISK",
+    ]);
 
     for (i, r) in report.results.iter().enumerate() {
         let score = r.hotspot_score.round() as u64;
@@ -68,7 +83,12 @@ pub fn report_terminal(report: &Report) {
     println!("{table}");
 
     // ── Co-change coupling ─────────────────────────────────────────────────
-    let notable: Vec<_> = report.couplings.iter().filter(|c| c.co_changes >= 5).take(5).collect();
+    let notable: Vec<_> = report
+        .couplings
+        .iter()
+        .filter(|c| c.co_changes >= 5)
+        .take(5)
+        .collect();
     if !notable.is_empty() {
         println!();
         println!("{}", "⚠️  Co-change coupling detected:".yellow());
@@ -77,7 +97,12 @@ pub fn report_terminal(report: &Report) {
                 "    {} ↔ {} {}",
                 c.file_a.cyan(),
                 c.file_b.cyan(),
-                format!("(changed together {}x, strength {}%)", c.co_changes, c.strength.round()).bright_black(),
+                format!(
+                    "(changed together {}x, strength {}%)",
+                    c.co_changes,
+                    c.strength.round()
+                )
+                .bright_black(),
             );
         }
     }
@@ -102,10 +127,14 @@ pub fn report_terminal(report: &Report) {
 fn score_cell(score: u64) -> Cell {
     let text = format!("{score:3}");
     match score {
-        75..=100 => Cell::new(text).fg(Color::Red).add_attribute(Attribute::Bold),
-        50..=74  => Cell::new(text).fg(Color::Yellow).add_attribute(Attribute::Bold),
-        25..=49  => Cell::new(text),
-        _        => Cell::new(text).fg(Color::Green),
+        75..=100 => Cell::new(text)
+            .fg(Color::Red)
+            .add_attribute(Attribute::Bold),
+        50..=74 => Cell::new(text)
+            .fg(Color::Yellow)
+            .add_attribute(Attribute::Bold),
+        25..=49 => Cell::new(text),
+        _ => Cell::new(text).fg(Color::Green),
     }
 }
 
@@ -114,8 +143,8 @@ fn score_cell(score: u64) -> Cell {
 fn churn_cell(score: f64) -> Cell {
     let s = score.round() as usize;
     let parts = ["", "▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"];
-    let filled  = s / 20;
-    let rem     = s % 20;
+    let filled = s / 20;
+    let rem = s % 20;
     let partial = parts[(rem * 8 / 20).min(8)];
     let bar = "█".repeat(filled) + partial;
     Cell::new(format!("{bar:<5}")).fg(Color::Red)
@@ -125,16 +154,18 @@ fn churn_cell(score: f64) -> Cell {
 fn tier_cell(tier: &Tier) -> Cell {
     match tier {
         Tier::Critical => Cell::new("🔴 CRITICAL").fg(Color::Red),
-        Tier::High     => Cell::new("🟠 HIGH").fg(Color::Yellow),
-        Tier::Medium   => Cell::new("🟡 MEDIUM"),
-        Tier::Low      => Cell::new("🟢 LOW").fg(Color::Green),
+        Tier::High => Cell::new("🟠 HIGH").fg(Color::Yellow),
+        Tier::Medium => Cell::new("🟡 MEDIUM"),
+        Tier::Low => Cell::new("🟢 LOW").fg(Color::Green),
     }
 }
 
 // ─── Other helpers ────────────────────────────────────────────────────────────
 
 fn truncate_path(s: &str, max: usize) -> String {
-    if s.len() <= max { return s.to_string(); }
+    if s.len() <= max {
+        return s.to_string();
+    }
     format!("…{}", &s[s.len().saturating_sub(max - 1)..])
 }
 
@@ -145,34 +176,41 @@ fn build_recommendations(results: &[HotspotResult]) -> Vec<String> {
         if r.details.top_author_percent >= 80.0 && r.details.author_count <= 2 {
             recs.push(format!(
                 "{} has {}% single-author commits — consider a knowledge-transfer session",
-                name.yellow(), r.details.top_author_percent.round()
+                name.yellow(),
+                r.details.top_author_percent.round()
             ));
         }
         if r.details.burst_incidents >= 3 {
             recs.push(format!(
                 "{} shows burst patterns: {} rapid-commit windows detected",
-                name.yellow(), r.details.burst_incidents
+                name.yellow(),
+                r.details.burst_incidents
             ));
         }
         if r.details.revert_count >= 2 {
             recs.push(format!(
                 "{} has been reverted {} times — consider adding tests or stricter review",
-                name.yellow(), r.details.revert_count
+                name.yellow(),
+                r.details.revert_count
             ));
         }
         if r.details.wip_commits >= 3 {
             recs.push(format!(
                 "{} appears in {} WIP/low-quality commits — this area needs careful review",
-                name.yellow(), r.details.wip_commits
+                name.yellow(),
+                r.details.wip_commits
             ));
         }
         if r.details.large_commit_count >= 3 {
             recs.push(format!(
                 "{} was swept up in {} large commits — consider smaller, focused PRs",
-                name.yellow(), r.details.large_commit_count
+                name.yellow(),
+                r.details.large_commit_count
             ));
         }
-        if recs.len() >= 8 { break; }
+        if recs.len() >= 8 {
+            break;
+        }
     }
     recs
 }

@@ -81,6 +81,82 @@ Interactive mode now follows this order:
 | `--path SUBDIR` | *(all)* | Restrict to a subdirectory |
 | `--bugs-only` | off | Only show files with bug-fix correlation |
 | `--no-interactive` | off | Skip interactive prompts |
+| `--config FILE` | *(none)* | Load settings from a YAML config file |
+| `--generate-config` | off | Print an annotated config template to stdout and exit |
+
+---
+
+## Configuration file
+
+For settings you want to persist across invocations — custom exclusions, adjusted weights,
+or a fixed `--since` window — use a YAML config file instead of repeating flags each time.
+
+### Quick start
+
+```bash
+# Option 1 — generate a full annotated template
+git-scanline --generate-config > .git-scanline.yml
+
+# Option 2 — copy the ready-to-use example and edit it
+cp .git-scanline.example.yml .git-scanline.yml
+
+# Use it
+git-scanline --config .git-scanline.yml /path/to/repo
+```
+
+### Precedence
+
+CLI flags always win. Config values only fill in settings that are still at their
+built-in default:
+
+```
+--flag value    →  always wins
+config value    →  applied only when --flag is at its built-in default
+built-in lists  →  always active unless removed via include_dirs
+```
+
+### Example file
+
+See [`.git-scanline.example.yml`](.git-scanline.example.yml) for a ready-to-copy,
+annotated configuration. Key fields:
+
+```yaml
+since: "6 months ago"         # Limit analysis window
+path: "src"                   # Restrict to a subdirectory
+top: 20                       # Files to show in report
+
+exclude_dirs:                 # Extra directories to ignore (merged with built-in list)
+  - "generated"
+  - "proto"
+
+include_dirs:                 # Remove from the built-in exclusion list
+  - "dist"
+
+exclude_extensions:           # Extra file extensions to ignore
+  - ".pb.go"
+  - ".d.ts"
+
+weights:                      # Adjust signal emphasis (auto-normalized at runtime)
+  bugs: 0.40
+  churn: 0.27
+```
+
+### Validation
+
+`git-scanline` validates the config on load and exits with a clear error message if:
+
+- An **unknown field** is present — catches typos before they silently do nothing
+- `format` is not one of `terminal`, `json`, `html`
+- `top` is set to `0`
+- Any weight is `≤ 0` or non-finite
+
+```
+$ git-scanline --config bad.yml
+Error: Config file 'bad.yml': Invalid 'format' value: "csv". Expected one of: "terminal", "json", "html"
+
+$ git-scanline --config bad.yml
+Error: Config file 'bad.yml': Invalid weight 'weights.churn': -0.5. Weights must be greater than 0.
+```
 
 ---
 

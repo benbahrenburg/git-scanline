@@ -1,8 +1,8 @@
-use std::path::Path;
+use crate::types::{Commit, DiffStats, DiffStatsMap};
 use std::io::{BufRead, BufReader, Read};
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::thread;
-use crate::types::{Commit, DiffStats, DiffStatsMap};
 
 /// Runs a single `git log --numstat` and returns structured Commit objects
 /// AND per-file line-level diff stats in one pass.
@@ -100,11 +100,11 @@ fn parse_commit_line(
             (parts.next(), parts.next(), parts.next(), parts.next())
         {
             *current = Some(Commit {
-                hash:      hash.to_string(),
-                author:    author.to_string(),
+                hash: hash.to_string(),
+                author: author.to_string(),
                 timestamp: timestamp.parse().unwrap_or(0),
-                subject:   subject.to_string(),
-                files:     Vec::new(),
+                subject: subject.to_string(),
+                files: Vec::new(),
             });
         }
     } else if trimmed.is_empty() {
@@ -137,13 +137,21 @@ fn normalize_filename(raw: &str) -> Option<String> {
     if raw.contains('{') && raw.contains("=>") {
         let re = once_cell::sync::Lazy::force(&RENAME_RE);
         let result = re.replace(raw, "$1").replace("//", "/");
-        return if result.contains('{') { None } else { Some(result.trim().to_string()) };
+        return if result.contains('{') {
+            None
+        } else {
+            Some(result.trim().to_string())
+        };
     }
     if raw.contains(" => ") {
         return raw.split(" => ").last().map(|s| s.trim().to_string());
     }
     let t = raw.trim();
-    if t.is_empty() { None } else { Some(t.to_string()) }
+    if t.is_empty() {
+        None
+    } else {
+        Some(t.to_string())
+    }
 }
 
 static RENAME_RE: once_cell::sync::Lazy<regex::Regex> =

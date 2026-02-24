@@ -8,11 +8,11 @@ use std::time::{Duration, Instant};
 // ── Wave ───────────────────────────────────────────────────────────────────────
 
 const WAVE_BASE: &str = "~^~^~~";
-const WAVE_LEN:  usize = 54;
+const WAVE_LEN: usize = 54;
 
 fn wave_line(frame: usize) -> String {
     let offset = frame % WAVE_BASE.len();
-    let long   = WAVE_BASE.repeat(20);
+    let long = WAVE_BASE.repeat(20);
     let window = &long[offset..offset + WAVE_LEN];
     format!("   {}", window)
 }
@@ -63,24 +63,28 @@ const MIN_DISPLAY_MS: u64 = 1600;
 /// - [`stop`](ZorpHandle::stop) — stops and **clears** the animation area.
 /// - *Dropping* without calling either method clears immediately (error paths).
 pub struct ZorpHandle {
-    running:       Arc<AtomicBool>,
+    running: Arc<AtomicBool>,
     clear_on_stop: Arc<AtomicBool>, // true → erase on stop; false → leave in place
-    thread:        Option<thread::JoinHandle<()>>,
-    started_at:    Instant,
-    is_noop:       bool,
+    thread: Option<thread::JoinHandle<()>>,
+    started_at: Instant,
+    is_noop: bool,
 }
 
 fn wait_min(started_at: Instant) {
     let elapsed = started_at.elapsed();
-    let min     = Duration::from_millis(MIN_DISPLAY_MS);
-    if elapsed < min { thread::sleep(min - elapsed); }
+    let min = Duration::from_millis(MIN_DISPLAY_MS);
+    if elapsed < min {
+        thread::sleep(min - elapsed);
+    }
 }
 
 impl ZorpHandle {
     /// Stops animation, waits for `MIN_DISPLAY_MS`, and **erases** the
     /// terminal area before returning.
     pub fn stop(self) {
-        if !self.is_noop { wait_min(self.started_at); }
+        if !self.is_noop {
+            wait_min(self.started_at);
+        }
         // clear_on_stop remains true — Drop will erase ZORP
     }
 
@@ -98,7 +102,9 @@ impl ZorpHandle {
 
 impl Drop for ZorpHandle {
     fn drop(&mut self) {
-        if self.is_noop { return; }
+        if self.is_noop {
+            return;
+        }
         self.running.store(false, Ordering::Relaxed);
         if let Some(t) = self.thread.take() {
             t.join().ok();
@@ -112,15 +118,15 @@ pub fn start_zorp() -> ZorpHandle {
     use std::io::IsTerminal;
     if !std::io::stderr().is_terminal() {
         return ZorpHandle {
-            running:       Arc::new(AtomicBool::new(false)),
+            running: Arc::new(AtomicBool::new(false)),
             clear_on_stop: Arc::new(AtomicBool::new(true)),
-            thread:        None,
-            started_at:    Instant::now(),
-            is_noop:       true,
+            thread: None,
+            started_at: Instant::now(),
+            is_noop: true,
         };
     }
 
-    let running       = Arc::new(AtomicBool::new(true));
+    let running = Arc::new(AtomicBool::new(true));
     let clear_on_stop = Arc::new(AtomicBool::new(true));
     let r = running.clone();
     let c = clear_on_stop.clone();
@@ -134,7 +140,9 @@ pub fn start_zorp() -> ZorpHandle {
 
         let mut frame = 0usize;
         loop {
-            if !r.load(Ordering::Relaxed) { break; }
+            if !r.load(Ordering::Relaxed) {
+                break;
+            }
             write_frame(frame, frame == 0);
             frame += 1;
             thread::sleep(Duration::from_millis(200));
@@ -155,9 +163,9 @@ pub fn start_zorp() -> ZorpHandle {
     ZorpHandle {
         running,
         clear_on_stop,
-        thread:     Some(handle),
+        thread: Some(handle),
         started_at: Instant::now(),
-        is_noop:    false,
+        is_noop: false,
     }
 }
 
@@ -165,10 +173,13 @@ pub fn start_zorp() -> ZorpHandle {
 /// No-op when stderr is not a TTY.
 pub fn print_zorp_footer() {
     use std::io::IsTerminal;
-    if !std::io::stderr().is_terminal() { return; }
+    if !std::io::stderr().is_terminal() {
+        return;
+    }
     let mut err = std::io::stderr();
     writeln!(err).ok();
-    for line in build_frame(4).iter() { // frame 4: antenna raised — waving goodbye
+    for line in build_frame(4).iter() {
+        // frame 4: antenna raised — waving goodbye
         writeln!(err, "{}", line).ok();
     }
     writeln!(err).ok();

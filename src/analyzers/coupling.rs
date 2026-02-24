@@ -1,5 +1,5 @@
-use std::collections::{HashMap, HashSet};
 use crate::types::{Commit, CouplingEntry};
+use std::collections::{HashMap, HashSet};
 
 // Skip commits touching more than this many files (large merges/reformats)
 const MAX_FILES_PER_COMMIT: usize = 20;
@@ -13,7 +13,9 @@ pub fn analyze_coupling(commits: &[Commit], files: &[String]) -> Vec<CouplingEnt
     let mut file_counts: HashMap<String, usize> = HashMap::new();
 
     for commit in commits {
-        let touched: Vec<&str> = commit.files.iter()
+        let touched: Vec<&str> = commit
+            .files
+            .iter()
             .filter(|f| file_set.contains(f.as_str()))
             .map(|s| s.as_str())
             .collect();
@@ -22,7 +24,9 @@ pub fn analyze_coupling(commits: &[Commit], files: &[String]) -> Vec<CouplingEnt
             *file_counts.entry(file.to_string()).or_insert(0) += 1;
         }
 
-        if touched.len() > MAX_FILES_PER_COMMIT { continue; }
+        if touched.len() > MAX_FILES_PER_COMMIT {
+            continue;
+        }
 
         for i in 0..touched.len() {
             for j in (i + 1)..touched.len() {
@@ -47,9 +51,16 @@ pub fn analyze_coupling(commits: &[Commit], files: &[String]) -> Vec<CouplingEnt
             let union = total_a + total_b - co_changes;
             let strength = if union > 0 {
                 (co_changes as f64 / union as f64) * 100.0
-            } else { 0.0 };
+            } else {
+                0.0
+            };
 
-            Some(CouplingEntry { file_a, file_b, co_changes, strength })
+            Some(CouplingEntry {
+                file_a,
+                file_b,
+                co_changes,
+                strength,
+            })
         })
         .collect();
 
@@ -61,8 +72,12 @@ pub fn analyze_coupling(commits: &[Commit], files: &[String]) -> Vec<CouplingEnt
 pub fn get_coupling_scores(files: &[String], couplings: &[CouplingEntry]) -> HashMap<String, f64> {
     let mut scores: HashMap<String, f64> = files.iter().map(|f| (f.clone(), 0.0)).collect();
     for c in couplings {
-        scores.entry(c.file_a.clone()).and_modify(|s| *s = s.max(c.strength));
-        scores.entry(c.file_b.clone()).and_modify(|s| *s = s.max(c.strength));
+        scores
+            .entry(c.file_a.clone())
+            .and_modify(|s| *s = s.max(c.strength));
+        scores
+            .entry(c.file_b.clone())
+            .and_modify(|s| *s = s.max(c.strength));
     }
     scores
 }
@@ -95,10 +110,12 @@ mod tests {
         let result = analyze_coupling(&commits, &files);
         assert!(!result.is_empty(), "Should detect a coupled pair");
         let pair = result.iter().find(|e| {
-            (e.file_a == "a.rs" && e.file_b == "b.rs") ||
-            (e.file_a == "b.rs" && e.file_b == "a.rs")
+            (e.file_a == "a.rs" && e.file_b == "b.rs") || (e.file_a == "b.rs" && e.file_b == "a.rs")
         });
-        assert!(pair.is_some(), "a.rs and b.rs should be identified as coupled");
+        assert!(
+            pair.is_some(),
+            "a.rs and b.rs should be identified as coupled"
+        );
     }
 
     #[test]
@@ -111,7 +128,10 @@ mod tests {
         ];
         let files = vec!["a.rs".to_string(), "b.rs".to_string()];
         let result = analyze_coupling(&commits, &files);
-        assert!(result.is_empty(), "Two co-changes should not meet the coupling threshold");
+        assert!(
+            result.is_empty(),
+            "Two co-changes should not meet the coupling threshold"
+        );
     }
 
     #[test]
@@ -124,8 +144,14 @@ mod tests {
         let files = vec!["a.rs".to_string(), "b.rs".to_string()];
         let couplings = analyze_coupling(&commits, &files);
         let scores = get_coupling_scores(&files, &couplings);
-        assert!(scores["a.rs"] > 0.0, "a.rs should have a non-zero coupling score");
-        assert!(scores["b.rs"] > 0.0, "b.rs should have a non-zero coupling score");
+        assert!(
+            scores["a.rs"] > 0.0,
+            "a.rs should have a non-zero coupling score"
+        );
+        assert!(
+            scores["b.rs"] > 0.0,
+            "b.rs should have a non-zero coupling score"
+        );
     }
 
     #[test]
@@ -136,10 +162,17 @@ mod tests {
             make_commit(&["a.rs", "b.rs"]),
             make_commit(&["lone.rs"]),
         ];
-        let files = vec!["a.rs".to_string(), "b.rs".to_string(), "lone.rs".to_string()];
+        let files = vec![
+            "a.rs".to_string(),
+            "b.rs".to_string(),
+            "lone.rs".to_string(),
+        ];
         let couplings = analyze_coupling(&commits, &files);
         let scores = get_coupling_scores(&files, &couplings);
-        assert_eq!(scores["lone.rs"], 0.0, "lone.rs never co-changes, should score 0");
+        assert_eq!(
+            scores["lone.rs"], 0.0,
+            "lone.rs never co-changes, should score 0"
+        );
     }
 
     #[test]
@@ -151,7 +184,9 @@ mod tests {
         let watched_refs: Vec<&str> = watched.iter().map(|s| s.as_str()).collect();
         let commits: Vec<Commit> = (0..3).map(|_| make_commit(&watched_refs)).collect();
         let result = analyze_coupling(&commits, &watched);
-        assert!(result.is_empty(),
-            "Commits with > 20 watched files should be excluded from coupling analysis");
+        assert!(
+            result.is_empty(),
+            "Commits with > 20 watched files should be excluded from coupling analysis"
+        );
     }
 }

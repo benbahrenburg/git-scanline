@@ -23,23 +23,154 @@ and run.
 
 ## Build
 
+### Prerequisites
+
+- [Rust toolchain](https://rustup.rs/) (rustup + cargo)
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+### Native build (current machine)
+
 ```bash
 cargo build --release
 # Binary: target/release/git-scanline
+# Binary (Windows): target/release/git-scanline.exe
 ```
 
-### Build multiple targets
+### Cross-compiling for specific targets
+
+First, add the desired Rust target:
 
 ```bash
-# Uses host-safe defaults and auto-installs missing Rust targets
+rustup target add <target>
+```
+
+Then build:
+
+```bash
+cargo build --release --target <target>
+# Binary: target/<target>/release/git-scanline[.exe]
+```
+
+#### macOS
+
+| Target | Description |
+|---|---|
+| `aarch64-apple-darwin` | Apple Silicon (M1/M2/M3) |
+| `x86_64-apple-darwin` | Intel Mac |
+
+```bash
+# Apple Silicon
+rustup target add aarch64-apple-darwin
+cargo build --release --target aarch64-apple-darwin
+
+# Intel
+rustup target add x86_64-apple-darwin
+cargo build --release --target x86_64-apple-darwin
+```
+
+> **Universal binary (macOS only):** Combine both macOS targets into a single binary using `lipo`:
+> ```bash
+> lipo -create \
+>   target/aarch64-apple-darwin/release/git-scanline \
+>   target/x86_64-apple-darwin/release/git-scanline \
+>   -output git-scanline-universal
+> ```
+
+#### Linux
+
+| Target | Description |
+|---|---|
+| `x86_64-unknown-linux-gnu` | 64-bit Linux (most servers/desktops) |
+| `aarch64-unknown-linux-gnu` | 64-bit ARM Linux (Raspberry Pi 4+, AWS Graviton) |
+| `x86_64-unknown-linux-musl` | 64-bit Linux, statically linked (no glibc dependency) |
+
+```bash
+# x86_64
+rustup target add x86_64-unknown-linux-gnu
+cargo build --release --target x86_64-unknown-linux-gnu
+
+# ARM64
+rustup target add aarch64-unknown-linux-gnu
+cargo build --release --target aarch64-unknown-linux-gnu
+
+# Static/musl (portable, no dynamic libc required)
+rustup target add x86_64-unknown-linux-musl
+cargo build --release --target x86_64-unknown-linux-musl
+```
+
+> **Cross-compiling from macOS to Linux** requires a linker for the target platform.
+> The easiest approach is [cross](https://github.com/cross-rs/cross) (uses Docker):
+> ```bash
+> cargo install cross
+> cross build --release --target x86_64-unknown-linux-gnu
+> ```
+
+#### Windows
+
+| Target | Description |
+|---|---|
+| `x86_64-pc-windows-gnu` | 64-bit Windows (MinGW/GNU toolchain) |
+| `x86_64-pc-windows-msvc` | 64-bit Windows (MSVC toolchain, requires Windows or cross-tools) |
+
+```bash
+# GNU toolchain (cross-compile friendly, no MSVC needed)
+rustup target add x86_64-pc-windows-gnu
+cargo build --release --target x86_64-pc-windows-gnu
+# Binary: target/x86_64-pc-windows-gnu/release/git-scanline.exe
+
+# MSVC toolchain (native Windows build)
+rustup target add x86_64-pc-windows-msvc
+cargo build --release --target x86_64-pc-windows-msvc
+# Binary: target/x86_64-pc-windows-msvc/release/git-scanline.exe
+```
+
+> **Cross-compiling from macOS/Linux to Windows (GNU)** requires `mingw-w64`:
+> ```bash
+> # macOS (Homebrew)
+> brew install mingw-w64
+>
+> # Ubuntu/Debian
+> sudo apt install gcc-mingw-w64-x86-64
+> ```
+> Then add to `~/.cargo/config.toml`:
+> ```toml
+> [target.x86_64-pc-windows-gnu]
+> linker = "x86_64-w64-mingw32-gcc"
+> ```
+
+### Build multiple targets at once
+
+The included script handles target installation and builds all platforms in one shot:
+
+```bash
+# Host-safe defaults — auto-detects your machine and installs missing targets
 ./scripts/build-targets.sh
 
-# Or provide explicit targets
+# Explicit targets
 ./scripts/build-targets.sh x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu
 
-# Use broad cross-platform matrix defaults
+# Full cross-platform matrix (macOS + Linux + Windows GNU)
 ./scripts/build-targets.sh --matrix
+
+# Debug build
+./scripts/build-targets.sh --debug
+
+# Skip automatic target installation
+./scripts/build-targets.sh --no-install-targets
 ```
+
+Default targets selected by `--matrix`:
+
+| Target | Platform |
+|---|---|
+| `aarch64-apple-darwin` | macOS Apple Silicon |
+| `x86_64-apple-darwin` | macOS Intel |
+| `x86_64-unknown-linux-gnu` | Linux x86_64 |
+| `aarch64-unknown-linux-gnu` | Linux ARM64 |
+| `x86_64-pc-windows-gnu` | Windows x86_64 |
 
 ### Run
 

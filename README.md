@@ -21,12 +21,6 @@ and run.
 
 ---
 
-## Project layout
-
-This repository now contains a single Rust implementation at the workspace root.
-
----
-
 ## Build
 
 ```bash

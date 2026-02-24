@@ -1,0 +1,28 @@
+[package]
+name        = "git-scanline"
+version     = "1.0.0"
+edition     = "2021"
+description = "Scan git history to surface bug-prone code hotspots"
+license     = "MIT"
+repository  = "https://github.com/benbahrenburg/git-scanline"
+homepage    = "https://github.com/benbahrenburg/git-scanline"
+readme      = "README.md"
+keywords    = ["git", "hotspot", "code-quality", "churn", "analysis"]
+categories  = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "git-scanline"
+path = "src/main.rs"
+
+[dependencies]
+clap        = { version = "4", features = ["derive"] }
+colored     = "2"
+comfy-table = "7"
+chrono      = "0.4"
+serde       = { version = "1", features = ["derive"] }
+serde_json  = "1"
+regex       = "1"
+dirs        = "5"
+once_cell   = "1"
+indicatif   = "0.17"
+rayon       = "1"

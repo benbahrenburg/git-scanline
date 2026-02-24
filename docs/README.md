@@ -1,23 +1,14 @@
 # git-scanline — Documentation
 
-`git-scanline` ships in two independent implementations that produce identical output.
-
-| | Rust | Node.js |
-|---|---|---|
-| Entry point | `rust/src/main.rs` | `node/bin/git-scanline.ts` |
-| Analyzer execution | Parallel (`rayon`) | Sequential |
-| Git invocations | 1 (`--numstat`) | 2 (separate log + diff) |
-| Pipeline steps | 5 | 9 |
-| Output formats | terminal, json, html | terminal, json, html |
+`git-scanline` ships as a single Rust implementation.
 
 ## Documentation
 
-- [Rust implementation](rust/architecture.md) — pipeline, parallel analyzers, types, scoring
-- [Node.js implementation](node/architecture.md) — pipeline, module structure, types
+- [Architecture](architecture.md) — pipeline, parallel analyzers, types, scoring
 
-## Shared concepts
+## Core concepts
 
-Both implementations apply the same conceptual pipeline:
+The Rust implementation applies this pipeline:
 
 1. Parse git commit history
 2. Detect security-sensitive files in history

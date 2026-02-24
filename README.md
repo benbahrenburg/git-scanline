@@ -21,26 +21,30 @@ and run.
 
 ---
 
-## Two implementations
+## Project layout
 
-| | [node/](node/) | [rust/](rust/) |
-|---|---|---|
-| Runtime | Node.js ≥ 18 | Native binary (no runtime) |
-| Build | `npm run build` | `cargo build --release` |
-| Binary | `node dist/bin/git-scanline.js` | `./git-scanline` |
-| Drag-and-drop | No | Yes (Finder / macOS) |
-| Desktop HTML default | No | Yes (`~/Desktop/`) |
+This repository now contains a single Rust implementation at the workspace root.
 
 ---
 
-## Rust version (recommended)
-
-### Build
+## Build
 
 ```bash
-cd rust
 cargo build --release
-# Binary: rust/target/release/git-scanline
+# Binary: target/release/git-scanline
+```
+
+### Build multiple targets
+
+```bash
+# Uses host-safe defaults and auto-installs missing Rust targets
+./scripts/build-targets.sh
+
+# Or provide explicit targets
+./scripts/build-targets.sh x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu
+
+# Use broad cross-platform matrix defaults
+./scripts/build-targets.sh --matrix
 ```
 
 ### Run
@@ -63,6 +67,13 @@ cargo build --release
 ./git-scanline /path/to/repo --format html --output /tmp/report.html
 ./git-scanline /path/to/repo --bugs-only --top 10
 ```
+
+Interactive mode now follows this order:
+
+1. Analyze and display the report in terminal.
+2. Ask whether to export the report to a file (`Output this report to file? [no]:`).
+3. If yes, ask for output path and export as HTML or JSON (based on file extension).
+4. Ask whether to analyze another repo (`Analyze another repo? [no]:`).
 
 ### Flags
 
@@ -138,35 +149,6 @@ cargo build --release
 
 ---
 
-## Node version
-
-### Build
-
-```bash
-cd node
-npm install
-npm run build
-# Output: node/dist/bin/git-scanline.js
-```
-
-### Run
-
-```bash
-# Analyze a specific repo
-node /path/to/git-scanline/node/dist/bin/git-scanline.js /path/to/repo
-
-# JSON output
-node /path/to/git-scanline/node/dist/bin/git-scanline.js /path/to/repo --format json
-
-# HTML report
-node /path/to/git-scanline/node/dist/bin/git-scanline.js /path/to/repo --format html --output report.html
-
-# Multiple repos (pass parent folder)
-node /path/to/git-scanline/node/dist/bin/git-scanline.js /path/to/projects-folder
-```
-
----
-
 ## Scoring signals
 
 | Signal | Default Weight | What it measures |
@@ -192,7 +174,7 @@ node /path/to/git-scanline/node/dist/bin/git-scanline.js /path/to/projects-folde
 
 ## Testing
 
-Both implementations include a unit test suite that runs without any configuration,
+The Rust suite includes unit tests that run without any configuration,
 plus integration tests that run against a real git repository on your machine.
 
 ### `.env` setup (required for integration tests)
@@ -224,16 +206,13 @@ Any repository works — the tests only read history and never write anything.
 
 ```bash
 # Rust — all tests (integration tests run if TEST_REPO_PATH is set)
-cd rust && cargo test
+cargo test
 
 # Rust — unit tests only
-cd rust && cargo test --lib
+cargo test --lib
 
 # Rust — verbose output showing skipped tests
-cd rust && cargo test -- --nocapture
-
-# Node — build first, then test
-cd node && npm run build && npm test
+cargo test -- --nocapture
 ```
 
 ### What each test covers
@@ -243,6 +222,33 @@ cd node && npm run build && npm test
 | `test_parse_log_real_repo` | Yes | `parse_log` returns commits with a valid hash and author |
 | `test_full_pipeline_scores_in_range` | Yes | End-to-end hotspot scores are in the 0–100 range |
 | All other tests (42) | No | Individual analyzers, scoring, path helpers, file filters |
+
+---
+
+## Community & Security
+
+- Code of Conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- Contributing guide: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Support channels: [SUPPORT.md](SUPPORT.md)
+- Release process (maintainers): [RELEASING.md](RELEASING.md)
+
+## Repository Policies
+
+- Editor and newline rules: [.editorconfig](.editorconfig)
+- Git text/binary attributes: [.gitattributes](.gitattributes)
+
+---
+
+## CI
+
+GitHub Actions run the following checks on pushes and pull requests to `main`:
+
+- `cargo fmt --check`
+- `cargo clippy --all-targets -- -D warnings`
+- `cargo test`
+- `cargo build --release`
+
+Workflow file: `.github/workflows/ci.yml`
 
 ---
 

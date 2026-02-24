@@ -1,0 +1,34 @@
+name: Documentation Task
+description: Improve docs, examples, or architecture notes
+labels: [documentation]
+body:
+  - type: input
+    id: area
+    attributes:
+      label: Docs area
+      description: Which file or section needs updates?
+      placeholder: README.md / docs/architecture.md / CONTRIBUTING.md
+    validations:
+      required: true
+
+  - type: textarea
+    id: issue
+    attributes:
+      label: Current problem
+      description: What is missing, unclear, or incorrect?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Proposed improvement
+      description: What should change?
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: How do we know this task is done?

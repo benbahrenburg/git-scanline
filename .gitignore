@@ -1,0 +1,28 @@
+# Test configuration (contains local paths — never commit)
+.env
+*.env
+
+# Node build output
+node/dist/
+node/node_modules/
+
+# Rust build output
+rust/target/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+
+# Claude Code workspace config
+.claude/

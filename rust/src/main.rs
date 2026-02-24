@@ -4,6 +4,7 @@ mod analyzers;
 mod scoring;
 mod filters;
 mod reporters;
+mod animation;
 
 use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -13,19 +14,6 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use types::*;
 
-const BANNER: &str = r#"╔══════════════════════════════════════════════════════════════╗
-║                                                              ║
-║   /\  /\  /\  /\  /\  /\  /\  /\  /\  /\  /\  /\  /\  /\  ║
-║  (oo)(oo)(oo)(oo)(oo)(oo)(oo)(oo)(oo)(oo)(oo)(oo)(oo)(oo)   ║
-║   \/  \/  \/  \/  \/  \/  \/  \/  \/  \/  \/  \/  \/  \/   ║
-║                                                              ║
-║              G I T - S C A N L I N E                        ║
-║                                                              ║
-║  ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~    ║
-║  Surface the riskiest files in your git repositories.       ║
-║  Signals: Churn · Bugs · Reverts · Coupling · Security      ║
-║                                                              ║
-╚══════════════════════════════════════════════════════════════╝"#;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -89,102 +77,118 @@ fn main() {
         args.repo_path = Some(std::env::current_dir().expect("Failed to get current directory"));
     }
 
-    let input_path = args.repo_path.as_ref().unwrap().clone();
+    loop {
+        let input_path = args.repo_path.as_ref().unwrap().clone();
 
-    if !input_path.exists() {
-        eprintln!("Error: path does not exist: {}", input_path.display());
-        if run_interactive_mode { wait_for_enter(); }
-        std::process::exit(1);
-    }
-
-    // ── Discover all git repos under the given path ────────────────────────────
-    let repos = find_git_repos(&input_path);
-    if repos.is_empty() {
-        eprintln!("Error: No git repositories found under: {}", input_path.display());
-        eprintln!("       Make sure the path contains a .git directory.");
-        if run_interactive_mode { wait_for_enter(); }
-        std::process::exit(1);
-    }
-
-    // Show banner for terminal format
-    if args.format == "terminal" {
-        eprintln!("{BANNER}");
-        eprintln!();
-    }
-
-    let is_multi = repos.len() > 1;
-    if is_multi {
-        eprintln!("🔍 Found {} git repositories:", repos.len());
-        for r in &repos {
-            eprintln!("   • {}", r.display());
+        if !input_path.exists() {
+            eprintln!("Error: path does not exist: {}", input_path.display());
+            if run_interactive_mode { wait_for_enter(); }
+            std::process::exit(1);
         }
-        eprintln!();
-    }
 
-    // ── Normalize weights ──────────────────────────────────────────────────────
-    let raw = Weights {
-        churn:          args.weight_churn,
-        bugs:           args.weight_bugs,
-        reverts:        args.weight_reverts,
-        bursts:         args.weight_bursts,
-        coupling:       args.weight_coupling,
-        silo:           args.weight_silo,
-        commit_quality: args.weight_commit_quality,
-    };
-    let wsum = raw.churn + raw.bugs + raw.reverts + raw.bursts + raw.coupling + raw.silo + raw.commit_quality;
-    let weights = Weights {
-        churn:          raw.churn          / wsum,
-        bugs:           raw.bugs           / wsum,
-        reverts:        raw.reverts        / wsum,
-        bursts:         raw.bursts         / wsum,
-        coupling:       raw.coupling       / wsum,
-        silo:           raw.silo           / wsum,
-        commit_quality: raw.commit_quality / wsum,
-    };
+        // ── Discover all git repos under the given path ────────────────────────
+        let repos = find_git_repos(&input_path);
+        if repos.is_empty() {
+            eprintln!("Error: No git repositories found under: {}", input_path.display());
+            eprintln!("       Make sure the path contains a .git directory.");
+            if run_interactive_mode { wait_for_enter(); }
+            std::process::exit(1);
+        }
 
-    // ── Base output path (used for single repo or as template for multi) ───────
-    let base_output: Option<PathBuf> = match args.format.as_str() {
-        "html" => Some(args.output.clone().unwrap_or_else(|| {
-            dirs::desktop_dir()
-                .unwrap_or_else(|| PathBuf::from("."))
-                .join("hotspot-report.html")
-        })),
-        _ => args.output.clone(),
-    };
+        // Animate ZORP then freeze it in place — it stays visible at the top while
+        // the spinner and report output appear below.
+        if args.format == "terminal" {
+            animation::start_zorp().freeze();
+        }
 
-    // ── Analyze each repo ──────────────────────────────────────────────────────
-    for repo_path in &repos {
-        let repo_name = repo_path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("repo");
-
-        // Resolve output path for this repo
-        let output_path = base_output.as_deref().map(|base| {
-            if is_multi { make_output_path(base, repo_name) } else { base.to_path_buf() }
-        });
-
+        let is_multi = repos.len() > 1;
         if is_multi {
-            eprintln!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-            eprintln!("  Analyzing: {} ({})", repo_name, repo_path.display());
-            eprintln!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            eprintln!("🔍 Found {} git repositories:", repos.len());
+            for r in &repos {
+                eprintln!("   • {}", r.display());
+            }
+            eprintln!();
         }
 
-        if let Err(e) = run_analysis(
-            repo_path,
-            repo_name,
-            &args,
-            &weights,
-            output_path.as_deref(),
-            is_multi,
-            run_interactive_mode,
-        ) {
-            eprintln!("Error analyzing {}: {}", repo_name, e);
-        }
-    }
+        // ── Normalize weights ────────────────────────────────────────────────────
+        let raw = Weights {
+            churn:          args.weight_churn,
+            bugs:           args.weight_bugs,
+            reverts:        args.weight_reverts,
+            bursts:         args.weight_bursts,
+            coupling:       args.weight_coupling,
+            silo:           args.weight_silo,
+            commit_quality: args.weight_commit_quality,
+        };
+        let wsum = raw.churn + raw.bugs + raw.reverts + raw.bursts + raw.coupling + raw.silo + raw.commit_quality;
+        let weights = Weights {
+            churn:          raw.churn          / wsum,
+            bugs:           raw.bugs           / wsum,
+            reverts:        raw.reverts        / wsum,
+            bursts:         raw.bursts         / wsum,
+            coupling:       raw.coupling       / wsum,
+            silo:           raw.silo           / wsum,
+            commit_quality: raw.commit_quality / wsum,
+        };
 
-    if run_interactive_mode {
-        wait_for_enter();
+        // ── Base output path (used for single repo or as template for multi) ─────
+        let base_output: Option<PathBuf> = match args.format.as_str() {
+            "html" => Some(args.output.clone().unwrap_or_else(|| {
+                dirs::desktop_dir()
+                    .unwrap_or_else(|| PathBuf::from("."))
+                    .join("hotspot-report.html")
+            })),
+            _ => args.output.clone(),
+        };
+
+        // ── Analyze each repo ────────────────────────────────────────────────────
+        for repo_path in &repos {
+            let repo_name = repo_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("repo");
+
+            // Resolve output path for this repo
+            let output_path = base_output.as_deref().map(|base| {
+                if is_multi { make_output_path(base, repo_name) } else { base.to_path_buf() }
+            });
+
+            if is_multi {
+                eprintln!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+                eprintln!("  Analyzing: {} ({})", repo_name, repo_path.display());
+                eprintln!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            }
+
+            if let Err(e) = run_analysis(
+                repo_path,
+                repo_name,
+                &args,
+                &weights,
+                output_path.as_deref(),
+                is_multi,
+                run_interactive_mode,
+            ) {
+                eprintln!("Error analyzing {}: {}", repo_name, e);
+            }
+        }
+
+        // Print ZORP as a footer after all report output
+        if args.format == "terminal" {
+            animation::print_zorp_footer();
+        }
+
+        // ── Offer to analyze another repo ────────────────────────────────────────
+        if run_interactive_mode {
+            println!();
+            let answer = prompt("  Analyze another repo? [no]: ");
+            if matches!(answer.trim().to_lowercase().as_str(), "yes" | "y") {
+                args.repo_path = None;
+                args = run_interactive(args);
+                continue;
+            }
+            wait_for_enter();
+        }
+        break;
     }
 }
 
@@ -212,36 +216,30 @@ fn run_analysis(
     let total_start = Instant::now();
     let mut step_start = Instant::now();
 
-    pb.set_message(format!("{}[1/9] Parsing commit log...", pfx));
-    let commits = match git::log_parser::parse_log(repo_path, &args.since, args.path.as_deref()) {
-        Ok(c) if !c.is_empty() => c,
-        Ok(_) => {
+    pb.set_message(format!("{}[1/5] Parsing commit log + diff stats...", pfx));
+    let (commits, diff_stats) = match git::log_parser::parse_log(repo_path, &args.since, args.path.as_deref()) {
+        Ok((c, _)) if c.is_empty() => {
             pb.finish_and_clear();
             return Err(format!(
                 "No commits found in '{}'. Try --since=\"4 years ago\"",
                 repo_path.display()
             ));
         }
+        Ok((c, d)) => (c, d),
         Err(e) => {
             pb.finish_and_clear();
             return Err(e.to_string());
         }
     };
     let t1 = fmt_dur(step_start.elapsed()); step_start = Instant::now();
-    pb.println(format!("  ✓ [1/9] Parsing commit log                    {t1}"));
+    pb.println(format!("  ✓ [1/5] Parsing commit log + diff stats       {t1}"));
 
-    pb.set_message(format!("{}[2/9] Scanning for security risks...", pfx));
+    pb.set_message(format!("{}[2/5] Scanning for security risks...", pfx));
     let security_risks = analyzers::security::analyze_security(&commits);
     let t2 = fmt_dur(step_start.elapsed()); step_start = Instant::now();
-    pb.println(format!("  ✓ [2/9] Scanning for security risks           {t2}"));
+    pb.println(format!("  ✓ [2/5] Scanning for security risks           {t2}"));
 
-    pb.set_message(format!("{}[3/9] Analyzing line-level churn...", pfx));
-    let diff_stats = git::diff_parser::parse_diff(repo_path, &args.since, args.path.as_deref())
-        .unwrap_or_default();
-    let t3 = fmt_dur(step_start.elapsed()); step_start = Instant::now();
-    pb.println(format!("  ✓ [3/9] Analyzing line-level churn            {t3}"));
-
-    pb.set_message(format!("{}[4/9] Filtering files...", pfx));
+    pb.set_message(format!("{}[3/5] Filtering files...", pfx));
     let all_files: HashSet<String> = commits.iter()
         .flat_map(|c| c.files.iter().cloned())
         .collect();
@@ -253,33 +251,36 @@ fn run_analysis(
         pb.finish_and_clear();
         return Err("No files found after filtering. Try --path or --since.".to_string());
     }
+    let t3 = fmt_dur(step_start.elapsed()); step_start = Instant::now();
+    pb.println(format!("  ✓ [3/5] Filtering files                       {t3}"));
+
+    pb.set_message(format!("{}[4/5] Running all analyzers in parallel...", pfx));
+    let (
+        (churn_data, (bug_data, revert_data)),
+        (burst_data, (coupling_data, (silo_data, commit_quality_data)))
+    ) = rayon::join(
+        || rayon::join(
+            || analyzers::churn::analyze_churn(&commits, &filtered_files),
+            || rayon::join(
+                || analyzers::bug_correlation::analyze_bug_correlation(&commits, &filtered_files),
+                || analyzers::revert_tracker::analyze_reverts(&commits, &filtered_files),
+            ),
+        ),
+        || rayon::join(
+            || analyzers::burst_detector::analyze_bursts(&commits, &filtered_files),
+            || rayon::join(
+                || analyzers::coupling::analyze_coupling(&commits, &filtered_files),
+                || rayon::join(
+                    || analyzers::blame::analyze_authors(&commits, &filtered_files),
+                    || analyzers::commit_quality::analyze_commit_quality(&commits, &filtered_files),
+                ),
+            ),
+        ),
+    );
     let t4 = fmt_dur(step_start.elapsed()); step_start = Instant::now();
-    pb.println(format!("  ✓ [4/9] Filtering files                       {t4}"));
+    pb.println(format!("  ✓ [4/5] All 7 analyzers (parallel)            {t4}"));
 
-    pb.set_message(format!("{}[5/9] Analyzing churn patterns...", pfx));
-    let churn_data = analyzers::churn::analyze_churn(&commits, &filtered_files);
-    let t5 = fmt_dur(step_start.elapsed()); step_start = Instant::now();
-    pb.println(format!("  ✓ [5/9] Analyzing churn patterns              {t5}"));
-
-    pb.set_message(format!("{}[6/9] Analyzing bug-fix correlations & reverts...", pfx));
-    let bug_data    = analyzers::bug_correlation::analyze_bug_correlation(&commits, &filtered_files);
-    let revert_data = analyzers::revert_tracker::analyze_reverts(&commits, &filtered_files);
-    let t6 = fmt_dur(step_start.elapsed()); step_start = Instant::now();
-    pb.println(format!("  ✓ [6/9] Bug-fix correlations & reverts        {t6}"));
-
-    pb.set_message(format!("{}[7/9] Analyzing bursts & co-change coupling...", pfx));
-    let burst_data    = analyzers::burst_detector::analyze_bursts(&commits, &filtered_files);
-    let coupling_data = analyzers::coupling::analyze_coupling(&commits, &filtered_files);
-    let t7 = fmt_dur(step_start.elapsed()); step_start = Instant::now();
-    pb.println(format!("  ✓ [7/9] Bursts & co-change coupling           {t7}"));
-
-    pb.set_message(format!("{}[8/9] Analyzing author concentration & commit quality...", pfx));
-    let silo_data           = analyzers::blame::analyze_authors(&commits, &filtered_files);
-    let commit_quality_data = analyzers::commit_quality::analyze_commit_quality(&commits, &filtered_files);
-    let t8 = fmt_dur(step_start.elapsed()); step_start = Instant::now();
-    pb.println(format!("  ✓ [8/9] Author concentration & commit quality {t8}"));
-
-    pb.set_message(format!("{}[9/9] Scoring hotspots...", pfx));
+    pb.set_message(format!("{}[5/5] Scoring hotspots...", pfx));
     let mut results = scoring::score_hotspots(
         &filtered_files, &churn_data, &bug_data, &revert_data,
         &burst_data, &coupling_data, &silo_data, &commit_quality_data,
@@ -295,8 +296,8 @@ fn run_analysis(
         .take(10)
         .collect();
 
-    let t9 = fmt_dur(step_start.elapsed());
-    pb.println(format!("  ✓ [9/9] Scoring hotspots                      {t9}"));
+    let t5 = fmt_dur(step_start.elapsed());
+    pb.println(format!("  ✓ [5/5] Scoring hotspots                      {t5}"));
     let total_time = fmt_dur(total_start.elapsed());
 
     pb.finish_and_clear();
@@ -418,8 +419,8 @@ fn make_output_path(base: &Path, repo_name: &str) -> PathBuf {
 // ── Interactive setup ──────────────────────────────────────────────────────────
 
 fn run_interactive(mut args: Args) -> Args {
-    eprintln!("{BANNER}");
-    eprintln!();
+    // ZORP is the welcome screen; stop() waits for MIN_DISPLAY_MS then clears.
+    animation::start_zorp().stop();
     println!("  Interactive Setup");
     println!("  Accepts a single repo OR a parent folder containing multiple repos.");
     println!("  Tip: Drag any folder into this window to insert its path.");
@@ -650,7 +651,7 @@ mod tests {
             eprintln!("Skipping: TEST_REPO_PATH not set or path does not exist");
             return;
         };
-        let commits = git::log_parser::parse_log(&repo, "", None)
+        let (commits, _) = git::log_parser::parse_log(&repo, "", None)
             .expect("parse_log should succeed on a valid repo");
         assert!(!commits.is_empty(), "Real repo should have commits");
         assert!(!commits[0].hash.is_empty(), "Commit should have a hash");
@@ -663,7 +664,7 @@ mod tests {
             eprintln!("Skipping: TEST_REPO_PATH not set or path does not exist");
             return;
         };
-        let commits = git::log_parser::parse_log(&repo, "", None)
+        let (commits, _) = git::log_parser::parse_log(&repo, "", None)
             .expect("parse_log should succeed");
         assert!(!commits.is_empty(), "Repo must have commits");
 

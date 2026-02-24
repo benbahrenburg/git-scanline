@@ -1,5 +1,5 @@
 use colored::Colorize;
-use comfy_table::{Table, presets::UTF8_FULL};
+use comfy_table::{Table, Cell, Color, Attribute, presets::UTF8_FULL};
 use crate::types::{Report, HotspotResult, Tier};
 
 pub fn report_terminal(report: &Report) {
@@ -43,24 +43,25 @@ pub fn report_terminal(report: &Report) {
     table.set_header(vec!["RANK", "FILE", "SCORE", "CHURN", "BUGS", "REVERTS", "WIP", "RISK"]);
 
     for (i, r) in report.results.iter().enumerate() {
-        let score    = r.hotspot_score.round() as u64;
-        let tier_str = tier_label(&r.tier);
-        let score_str = color_score(score, &format!("{score:3}"));
-        let wip_str = if r.details.wip_commits > 0 {
-            r.details.wip_commits.to_string().yellow().to_string()
+        let score = r.hotspot_score.round() as u64;
+
+        // Use Cell objects with native color attributes so comfy-table measures
+        // widths from plain text (no ANSI escape bytes in the column content).
+        let wip_cell = if r.details.wip_commits > 0 {
+            Cell::new(r.details.wip_commits.to_string()).fg(Color::Yellow)
         } else {
-            "0".bright_black().to_string()
+            Cell::new("0").fg(Color::DarkGrey)
         };
 
         table.add_row(vec![
-            format!("{:3}", i + 1),
-            truncate_path(&r.file, 44),
-            score_str,
-            make_bar(r.churn_score),
-            r.details.bug_commits.to_string(),
-            r.details.revert_count.to_string(),
-            wip_str,
-            tier_str,
+            Cell::new(format!("{:3}", i + 1)),
+            Cell::new(truncate_path(&r.file, 44)),
+            score_cell(score),
+            churn_cell(r.churn_score),
+            Cell::new(r.details.bug_commits.to_string()),
+            Cell::new(r.details.revert_count.to_string()),
+            wip_cell,
+            tier_cell(&r.tier),
         ]);
     }
 
@@ -94,35 +95,43 @@ pub fn report_terminal(report: &Report) {
     println!();
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Cell builders ────────────────────────────────────────────────────────────
 
-fn make_bar(score: f64) -> String {
+/// Score cell: plain numeric text + color chosen by tier.
+/// Plain text ensures comfy-table measures the real visible width (3 chars).
+fn score_cell(score: u64) -> Cell {
+    let text = format!("{score:3}");
+    match score {
+        75..=100 => Cell::new(text).fg(Color::Red).add_attribute(Attribute::Bold),
+        50..=74  => Cell::new(text).fg(Color::Yellow).add_attribute(Attribute::Bold),
+        25..=49  => Cell::new(text),
+        _        => Cell::new(text).fg(Color::Green),
+    }
+}
+
+/// Churn bar: 5-char block bar, colored red.
+/// Plain text (no embedded ANSI) so column width = 5 chars exactly.
+fn churn_cell(score: f64) -> Cell {
     let s = score.round() as usize;
     let parts = ["", "▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"];
     let filled  = s / 20;
     let rem     = s % 20;
     let partial = parts[(rem * 8 / 20).min(8)];
     let bar = "█".repeat(filled) + partial;
-    format!("{bar:<5}").red().to_string()
+    Cell::new(format!("{bar:<5}")).fg(Color::Red)
 }
 
-fn color_score(score: u64, text: &str) -> String {
-    match score {
-        75..=100 => text.red().bold().to_string(),
-        50..=74  => text.yellow().bold().to_string(),
-        25..=49  => text.white().to_string(),
-        _        => text.green().to_string(),
-    }
-}
-
-fn tier_label(tier: &Tier) -> String {
+/// Risk tier cell: plain label text + color, no embedded ANSI.
+fn tier_cell(tier: &Tier) -> Cell {
     match tier {
-        Tier::Critical => "🔴 CRITICAL".red().to_string(),
-        Tier::High     => "🟠 HIGH".yellow().to_string(),
-        Tier::Medium   => "🟡 MEDIUM".white().to_string(),
-        Tier::Low      => "🟢 LOW".green().to_string(),
+        Tier::Critical => Cell::new("🔴 CRITICAL").fg(Color::Red),
+        Tier::High     => Cell::new("🟠 HIGH").fg(Color::Yellow),
+        Tier::Medium   => Cell::new("🟡 MEDIUM"),
+        Tier::Low      => Cell::new("🟢 LOW").fg(Color::Green),
     }
 }
+
+// ─── Other helpers ────────────────────────────────────────────────────────────
 
 fn truncate_path(s: &str, max: usize) -> String {
     if s.len() <= max { return s.to_string(); }

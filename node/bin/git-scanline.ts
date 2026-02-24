@@ -22,6 +22,7 @@ import { filterFiles } from '../src/filters/file-filter.js';
 import { reportTerminal } from '../src/reporters/terminal.js';
 import { reportJson } from '../src/reporters/json.js';
 import { reportHtml } from '../src/reporters/html.js';
+import { startZorpAnimation, printZorpFooter, type ZorpHandle } from '../src/reporters/zorp-animation.js';
 
 interface CliOptions {
   since: string;
@@ -54,19 +55,6 @@ interface RunConfig {
   };
 }
 
-const BANNER = `\
-╔══════════════════════════════════════════════════════════════╗
-║                                                              ║
-║  ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░     ║
-║                                                              ║
-║             G I T - S C A N L I N E                          ║
-║                                                              ║
-║  ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░     ║
-║                                                              ║
-║  Surface the riskiest files in your git repositories.        ║
-║  Signals: Churn · Bugs · Reverts · Coupling · Security       ║
-║                                                              ║
-╚══════════════════════════════════════════════════════════════╝`;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(
@@ -282,20 +270,26 @@ async function main(): Promise<void> {
     },
   };
 
+  // Start ZORP animation for terminal format — runs until analysis begins
+  let anim: ZorpHandle | null = null;
+
   if (needsInteractive) {
     config = await runInteractive(config);
   } else if (config.format === 'terminal') {
-    // Show banner for non-interactive terminal output
-    process.stderr.write(BANNER + '\n\n');
+    anim = startZorpAnimation();
   }
 
   // ── Discover repos ───────────────────────────────────────────────────────────
   const repos = findGitRepos(config.inputPath);
 
   if (repos.length === 0) {
+    if (anim) await anim.stop(); // clear ZORP before error message
     console.error(`Error: No git repositories found under: ${config.inputPath}`);
     process.exit(1);
   }
+
+  // Freeze ZORP in place — it stays as a header while output appears below
+  if (anim) { await anim.freeze(); anim = null; }
 
   const isMulti = repos.length > 1;
   if (isMulti) {
@@ -324,16 +318,22 @@ async function main(): Promise<void> {
       if (process.env.DEBUG) console.error(err);
     }
   }
+
+  // Print ZORP as a footer after all report output
+  if (config.format === 'terminal') {
+    printZorpFooter();
+  }
 }
 
 // ── Interactive setup ──────────────────────────────────────────────────────────
 
 async function runInteractive(defaults: RunConfig): Promise<RunConfig> {
+  // ZORP is the welcome screen; stop() waits MIN_DISPLAY_MS then clears.
+  await startZorpAnimation().stop();
+
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const ask = (q: string): Promise<string> => new Promise(resolve => rl.question(q, resolve));
 
-  console.error(BANNER);
-  console.error('');
   console.log('  Interactive Setup');
   console.log('  Accepts a single repo OR a parent folder containing multiple repos.');
   console.log('  Press Enter to accept [defaults], or type a new value.\n');
